@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8">
+  <title>Morse-toistin v2 (testi, vastaanotto ja tilastot)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #f5f5f5;
+      color: #222;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.4rem;
+    }
+    .card {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 16px 20px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      font-family: "Fira Code", Consolas, monospace;
+      font-size: 0.9rem;
+      box-sizing: border-box;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      resize: vertical;
+    }
+    .morse-output {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      min-height: 40px;
+      background: #fafafa;
+      font-family: "Fira Code", Consolas, monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .label {
+      font-size: 0.85rem;
+      margin-bottom: 2px;
+    }
+    .sliders {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .btn {
+      border: none;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      user-select: none;
+    }
+    .btn-primary {
+      background: #1976d2;
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #888;
+      color: #fff;
+    }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #ccc;
+      color: #333;
+    }
+    .btn[disabled] {
+      opacity: 0.5;
+      cursor: default;
+    }
+    .options-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 0.9rem;
+      align-items: center;
+    }
+    .morse-letter {
+      display: inline-block;
+    }
+    .morse-letter.highlight {
+      background: #ffeb3b;
+      border-radius: 4px;
+      padding: 0 2px;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    .recv-output {
+      min-height: 40px;
+    }
+    .recv-output .correct {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+    .recv-output .wrong {
+      color: #c62828;
+      font-weight: 600;
+    }
+    .answer-char {
+      margin-right: 2px;
+    }
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Morse-toistin v2</h1>
+
+    <div class="label">Lähetettävä teksti:</div>
+    <textarea id="text" placeholder="Kirjoita tähän teksti, jonka haluat toistaa morsella..."></textarea>
+
+    <div class="options-row">
+      <label>
+        <input type="checkbox" id="lettersSetCheckbox">
+        Kirjaimet (A..Z, Å, Ä, Ö)
+      </label>
+      <label>
+        <input type="checkbox" id="digitsSetCheckbox">
+        Numerot (0..9)
+      </label>
+      <label>
+        <input type="checkbox" id="punctSetCheckbox">
+        Välimerkit (.,?!:;/-'\"()=+@)
+      </label>
+      <button id="clearText" class="btn btn-ghost" type="button">Tyhjennä</button>
+    </div>
+
+    <div class="options-row" style="margin-top:4px;">
+      <span>Testattava merkkijoukko:</span>
+      <label><input type="radio" name="setMode" id="setModeAll" checked> Kaikki valitut</label>
+      <label><input type="radio" name="setMode" id="setModeLetters"> Vain kirjaimet</label>
+      <label><input type="radio" name="setMode" id="setModeDigits"> Vain numerot</label>
+      <label><input type="radio" name="setMode" id="setModeCustom"> Vain nämä:</label>
+      <input id="customChars" type="text" style="width:140px" placeholder="esim. AEIO123?">
+    </div>
+
+    <div class="options-row" style="margin-top:4px;">
+      <label>
+        Toistojen määrä per merkki:
+        <span id="repeatCountLabel">5</span>
+      </label>
+      <input id="repeatCount" type="range" min="1" max="9" step="1" value="5" style="width:160px">
+
+      <label>
+        <input type="checkbox" id="randomOrder">
+        Satunnainen järjestys (sekoita ryhmät)
+      </label>
+      <label>
+        <input type="checkbox" id="groupSpace" checked>
+        Merkkiryhmien väliin välilyönti
+      </label>
+    </div>
+
+    <div class="options-row" style="margin-top:4px;">
+      <label>
+        <input type="checkbox" id="randomizeGroup">
+        Randomize group (satunnaiset merkit ryhmissä)
+      </label>
+      <label>
+        <input type="checkbox" id="groupCountEnabled">
+        Ryhmien määrä:
+      </label>
+      <span id="groupCountLabel">10</span>
+      <input id="groupCount" type="range" min="1" max="100" step="1" value="10" style="width:160px">
+    </div>
+
+    <div class="btn-row">
+      <button id="play" class="btn btn-primary" type="button">Toista</button>
+      <button id="pause" class="btn btn-secondary" type="button" disabled>Paussi</button>
+      <button id="stop" class="btn btn-secondary" type="button" disabled>Keskeytä</button>
+    </div>
+
+    <div class="sliders">
+      <div>
+        <div class="label">Nopeus WPM (words/min): <span id="wpmLabel">20</span></div>
+        <input id="wpm" type="range" min="5" max="40" step="1" value="20" style="width:100%">
+      </div>
+      <div>
+        <div class="label">Merkkejä/min (CPM): <span id="cpmLabel">100</span></div>
+        <input id="cpm" type="range" min="20" max="400" step="5" value="100" style="width:100%">
+      </div>
+      <div>
+        <div class="label">Taajuus (Hz): <span id="freqLabel">600</span></div>
+        <input id="freq" type="range" min="300" max="1200" step="10" value="600" style="width:100%">
+      </div>
+      <div>
+        <div class="label">Äänenvoimakkuus: <span id="volLabel">50</span>%</div>
+        <input id="vol" type="range" min="0" max="100" step="1" value="50" style="width:100%">
+      </div>
+    </div>
+
+    <div class="label" style="margin-top:12px;">Morse (lähetys):</div>
+    <div id="morse" class="morse-output">(ei tekstiä)</div>
+    <div class="hint">Toiston aikana kulloinkin soitettava merkki korostuu sekä tekstissä että morse-koodissa.</div>
+
+    <div class="label" style="margin-top:12px;">Vastaanotto:</div>
+    <div class="options-row" style="margin-top:4px;">
+      <label>
+        <input type="checkbox" id="recvMode">
+        Vastaanotto-testi päällä
+      </label>
+      <label>
+        <input type="radio" name="recvModeType" id="recvModeWait" checked>
+        Odota merkkiä ennen seuraavaa
+      </label>
+      <label>
+        <input type="radio" name="recvModeType" id="recvModeFree">
+        Ei odota, voi kirjoittaa jäljessä
+      </label>
+      <label>
+        <input type="checkbox" id="allowCorrection">
+        Salli korjaus Backspacella
+      </label>
+    </div>
+    <div id="recv" class="morse-output recv-output"></div>
+    <div class="hint">
+      Vastaanotto päällä: kirjoita kuulemasi merkki. Odottavassa tilassa merkki kelpaa vasta kun ääni on soitettu loppuun.
+      Puskuroivassa tilassa voit olla monta merkkiä perässä, mutta et voi vastata merkkiin ennen kuin sen ääni on päättynyt.
+      Liian aikainen tai ylimääräinen merkki antaa virheäänen ja laittaa toiston pauselle.
+    </div>
+
+    <div class="stats-row">
+      <div>Merkkejä yhteensä: <span id="statTotal">0</span></div>
+      <div>Soitettuja: <span id="statPlayed">0</span></div>
+      <div>Oikein: <span id="statCorrect">0</span></div>
+      <div>Väärin: <span id="statWrong">0</span></div>
+      <div>Liian aikaisin / ylimääräiset: <span id="statEarly">0</span></div>
+      <div>Oikein %: <span id="statPercent">0</span>%</div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    // --- MORSE-taulukko ---
+    const MORSE = {
+      "A": ".-",   "B": "-...", "C": "-.-.", "D": "-..",  "E": ".",    "F": "..-.",
+      "G": "--.",  "H": "....", "I": "..",   "J": ".---", "K": "-.-",  "L": ".-..",
+      "M": "--",   "N": "-.",   "O": "---",  "P": ".--.", "Q": "--.-", "R": ".-.",
+      "S": "...",  "T": "-",    "U": "..-",  "V": "...-", "W": ".--",  "X": "-..-",
+      "Y": "-.--", "Z": "--..",
+      "Å": ".--.-", "Ä": ".-.-", "Ö": "---.",
+      "0": "-----", "1": ".----", "2": "..---", "3": "...--", "4": "....-",
+      "5": ".....", "6": "-....", "7": "--...", "8": "---..", "9": "----.",
+      ".": ".-.-.-", ",": "--..--", "?": "..--..", "!": "-.-.--", ":": "---...",
+      ";": "-.-.-.", "/": "-..-.", "-": "-....-", "'": ".----.", "\"": ".-..-.",
+      "(": "-.--.", ")": "-.--.-", "=": "-...-", "+": ".-.-.", "@": ".--.-."
+    };
+
+    // --- DOM-viittaukset ---
+    const tEl      = document.getElementById("text");
+    const mEl      = document.getElementById("morse");
+    const recvEl   = document.getElementById("recv");
+
+    const lettersSetEl = document.getElementById("lettersSetCheckbox");
+    const digitsSetEl  = document.getElementById("digitsSetCheckbox");
+    const punctSetEl   = document.getElementById("punctSetCheckbox");
+
+    const clearBtn     = document.getElementById("clearText");
+    const recvModeEl   = document.getElementById("recvMode");
+
+    const setModeAllEl     = document.getElementById("setModeAll");
+    const setModeLettersEl = document.getElementById("setModeLetters");
+    const setModeDigitsEl  = document.getElementById("setModeDigits");
+    const setModeCustomEl  = document.getElementById("setModeCustom");
+    const customCharsEl    = document.getElementById("customChars");
+
+    const repeatCountEl      = document.getElementById("repeatCount");
+    const repeatCountLabelEl = document.getElementById("repeatCountLabel");
+    const randomOrderEl      = document.getElementById("randomOrder");
+    const groupSpaceEl       = document.getElementById("groupSpace");
+
+    const randomizeGroupEl      = document.getElementById("randomizeGroup");
+    const groupCountEnabledEl   = document.getElementById("groupCountEnabled");
+    const groupCountEl          = document.getElementById("groupCount");
+    const groupCountLabelEl     = document.getElementById("groupCountLabel");
+
+    const wpmEl   = document.getElementById("wpm");
+    const cpmEl   = document.getElementById("cpm");
+    const freqEl  = document.getElementById("freq");
+    const volEl   = document.getElementById("vol");
+
+    const wpmL    = document.getElementById("wpmLabel");
+    const cpmL    = document.getElementById("cpmLabel");
+    const freqL   = document.getElementById("freqLabel");
+    const volL    = document.getElementById("volLabel");
+
+    const playBtn  = document.getElementById("play");
+    const pauseBtn = document.getElementById("pause");
+    const stopBtn  = document.getElementById("stop");
+
+    const recvModeWaitEl  = document.getElementById("recvModeWait");
+    const recvModeFreeEl  = document.getElementById("recvModeFree");
+    const allowCorrectionEl = document.getElementById("allowCorrection");
+
+    const statTotalEl   = document.getElementById("statTotal");
+    const statPlayedEl  = document.getElementById("statPlayed");
+    const statCorrectEl = document.getElementById("statCorrect");
+    const statWrongEl   = document.getElementById("statWrong");
+    const statEarlyEl   = document.getElementById("statEarly");
+    const statPercentEl = document.getElementById("statPercent");
+
+    // --- Audio & toiston tila ---
+    let ctx = null;
+    let gain = null;
+
+    let playing = false;
+    let paused  = false;
+
+    let schedule = [];
+    let scheduleIndex = 0;
+
+    let currentOsc = null;
+    let currentSegmentTimeout = null;
+    let unitDurationSec = 1.2 / 20;
+    let currentFreq = 600;
+
+    let currentMorseWords = [];
+    let currentLettersMeta = [];
+    let currentHighlightIndex = null;
+
+    let totalLetters = 0;
+    let playedCount  = 0;
+    let correctCount = 0;
+    let wrongCount   = 0;
+    let earlyCount   = 0;
+
+    let playedMeta = new Set();
+    let answeredMeta = new Set();
+    let completedMeta = new Set();
+    let lastStartedMetaIndex = null;
+
+    let waitForAnswerMetaIndex = null;
+
+    let trainingCurrentLetterIndex = 0;
+    let trainingLetterAudioPlaying = false;
+    let trainingAnswerReceived = false;
+
+    const answerHistory = [];
+
+    // --- Apufunktioita ---
+    function getRepeatCount() {
+      const n = parseInt(repeatCountEl.value, 10) || 1;
+      return Math.max(1, Math.min(9, n));
+    }
+
+    function updateStats() {
+      statTotalEl.textContent   = String(totalLetters);
+      statPlayedEl.textContent  = String(playedCount);
+      statCorrectEl.textContent = String(correctCount);
+      statWrongEl.textContent   = String(wrongCount);
+      statEarlyEl.textContent   = String(earlyCount);
+      const pct = totalLetters > 0 ? Math.round((correctCount / totalLetters) * 100) : 0;
+      statPercentEl.textContent = String(pct);
+    }
+
+    function resetTestStatsForNewText() {
+      totalLetters = currentLettersMeta.length;
+      playedCount  = 0;
+      correctCount = 0;
+      wrongCount   = 0;
+      earlyCount   = 0;
+      playedMeta.clear();
+      answeredMeta.clear();
+      completedMeta.clear();
+      lastStartedMetaIndex = null;
+      waitForAnswerMetaIndex = null;
+      answerHistory.length = 0;
+      recvEl.innerHTML = "";
+      updateStats();
+    }
+
+    function resetTestStatsForNewRun() {
+      playedCount  = 0;
+      correctCount = 0;
+      wrongCount   = 0;
+      earlyCount   = 0;
+      playedMeta.clear();
+      answeredMeta.clear();
+      completedMeta.clear();
+      lastStartedMetaIndex = null;
+      waitForAnswerMetaIndex = null;
+      answerHistory.length = 0;
+      recvEl.innerHTML = "";
+      updateStats();
+    }
+
+    function clearHighlight() {
+      const prev = mEl.querySelector(".morse-letter.highlight");
+      if (prev) prev.classList.remove("highlight");
+      currentHighlightIndex = null;
+    }
+
+    function highlightLetter(metaIndex) {
+      const meta = currentLettersMeta[metaIndex];
+      if (!meta) return;
+
+      clearHighlight();
+
+      if (typeof tEl.setSelectionRange === "function") {
+        try {
+          tEl.focus();
+          tEl.setSelectionRange(meta.srcIndex, meta.srcIndex + 1);
+        } catch (e) {}
+      }
+
+      const span = mEl.querySelector(`.morse-letter[data-idx="${metaIndex}"]`);
+      if (span) {
+        span.classList.add("highlight");
+      }
+
+      currentHighlightIndex = metaIndex;
+    }
+
+    // --- Teksti -> morse ---
+    function textToMorse(text) {
+      const lettersMeta = [];
+      const morseWords = [];
+      const outParts = [];
+
+      let inWord = false;
+      let bufferCodes = [];
+      let bufferMetas = [];
+      let morseWordIndex = -1;
+
+      function flushWord() {
+        if (bufferCodes.length === 0) return;
+        morseWordIndex++;
+        morseWords.push(bufferCodes);
+        outParts.push(bufferCodes.join(" "));
+        bufferMetas.forEach((m, li) => {
+          m.wordIndex = morseWordIndex;
+          m.letterIndex = li;
+          lettersMeta.push(m);
+        });
+        bufferCodes = [];
+        bufferMetas = [];
+      }
+
+      const s = text;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+
+        if (/\s/.test(ch)) {
+          if (inWord) {
+            flushWord();
+            inWord = false;
+          }
+          continue;
+        }
+
+        if (!inWord) inWord = true;
+
+        const upper = ch.toUpperCase();
+        const code = MORSE[upper];
+        if (code) {
+          bufferCodes.push(code);
+          bufferMetas.push({
+            srcIndex: i,
+            code: code,
+            char: upper,
+            wordIndex: 0,
+            letterIndex: 0
+          });
+        }
+      }
+
+      if (inWord) flushWord();
+
+      return {
+        morseWords,
+        morseString: outParts.join("   "),
+        lettersMeta
+      };
+    }
+
+    function buildSchedule(morseWords, lettersMeta) {
+      const schedule = [];
+      const metaMap = new Map();
+      lettersMeta.forEach((m, idx) => {
+        const key = `${m.wordIndex}:${m.letterIndex}`;
+        metaMap.set(key, idx);
+      });
+
+      morseWords.forEach((letters, wi) => {
+        letters.forEach((letter, li) => {
+          const key = `${wi}:${li}`;
+          const metaIndex = metaMap.get(key);
+          const syms = letter.split("");
+
+          syms.forEach((s, si) => {
+            schedule.push({
+              type: "tone",
+              units: s === "." ? 1 : 3,
+              symbol: s,
+              wordIndex: wi,
+              letterIndex: li,
+              letterMetaIndex: metaIndex,
+              isLetterStart: si === 0
+            });
+            if (si < syms.length - 1) {
+              schedule.push({ type: "silence", units: 1 });
+            }
+          });
+
+          if (li < letters.length - 1) {
+            schedule.push({ type: "silence", units: 3 });
+          }
+        });
+
+        if (wi < morseWords.length - 1) {
+          schedule.push({ type: "silence", units: 7 });
+        }
+      });
+
+      return schedule;
+    }
+
+    function refreshMorse() {
+      const { morseWords, lettersMeta } = textToMorse(tEl.value);
+      currentMorseWords = morseWords;
+      currentLettersMeta = lettersMeta;
+
+      clearHighlight();
+
+      if (!lettersMeta.length) {
+        mEl.textContent = "(ei kelvollisia merkkejä)";
+        totalLetters = 0;
+        updateStats();
+        recvEl.innerHTML = "";
+        return;
+      }
+
+      mEl.innerHTML = "";
+      let lastWordIndex = -1;
+
+      lettersMeta.forEach((meta, idx) => {
+        if (meta.wordIndex !== lastWordIndex) {
+          if (idx > 0) {
+            mEl.appendChild(document.createTextNode("   "));
+          }
+          lastWordIndex = meta.wordIndex;
+        } else {
+          if (idx > 0) {
+            mEl.appendChild(document.createTextNode(" "));
+          }
+        }
+
+        const span = document.createElement("span");
+        span.className = "morse-letter";
+        span.dataset.idx = String(idx);
+        span.textContent = meta.code;
+        mEl.appendChild(span);
+      });
+
+      resetTestStatsForNewText();
+    }
+
+    // --- Audio ---
+    function ensureAudio() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+        gain = ctx.createGain();
+        gain.gain.value = volEl.value / 100;
+        gain.connect(ctx.destination);
+      }
+    }
+
+    function stopCurrentOsc() {
+      if (currentOsc) {
+        try {
+          currentOsc.stop();
+          currentOsc.disconnect();
+        } catch (e) {}
+        currentOsc = null;
+      }
+    }
+
+    function clearSegmentTimeout() {
+      if (currentSegmentTimeout !== null) {
+        clearTimeout(currentSegmentTimeout);
+        currentSegmentTimeout = null;
+      }
+    }
+
+    function genericStopCleanup() {
+      clearSegmentTimeout();
+      stopCurrentOsc();
+      schedule = [];
+      scheduleIndex = 0;
+      clearHighlight();
+      waitForAnswerMetaIndex = null;
+      trainingLetterAudioPlaying = false;
+      trainingAnswerReceived = false;
+      trainingCurrentLetterIndex = 0;
+      completedMeta.clear();
+      lastStartedMetaIndex = null;
+    }
+
+    function stop() {
+      if (!playing && !paused) return;
+      playing = false;
+      paused = false;
+
+      genericStopCleanup();
+
+      playBtn.disabled  = false;
+      playBtn.textContent = "Toista";
+      pauseBtn.disabled = true;
+      stopBtn.disabled  = true;
+    }
+
+    function pause() {
+      if (!playing || paused) return;
+      paused = true;
+      clearSegmentTimeout();
+      stopCurrentOsc();
+
+      pauseBtn.disabled = true;
+      playBtn.disabled  = false;
+      playBtn.textContent = "Jatka";
+      stopBtn.disabled  = false;
+    }
+
+    function playErrorBeepAndPause() {
+      if (!playing) return;
+      pause();
+
+      ensureAudio();
+      try { ctx.resume(); } catch (e) {}
+
+      const osc = ctx.createOscillator();
+      const errGain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = 220;
+      errGain.gain.value = (volEl.value / 100) * 1.2;
+
+      osc.connect(errGain);
+      errGain.connect(ctx.destination);
+      osc.start();
+
+      setTimeout(() => {
+        try { osc.stop(); } catch(e) {}
+        osc.disconnect();
+        errGain.disconnect();
+      }, 150);
+    }
+
+    function markLastLetterCompleted() {
+      if (lastStartedMetaIndex != null && !completedMeta.has(lastStartedMetaIndex)) {
+        completedMeta.add(lastStartedMetaIndex);
+      }
+    }
+
+    function playNextSegmentStreaming() {
+      if (!playing || paused) return;
+
+      if (scheduleIndex >= schedule.length) {
+        markLastLetterCompleted();
+        stop();
+        return;
+      }
+
+      const seg = schedule[scheduleIndex];
+      const durMs = seg.units * unitDurationSec * 1000;
+
+      if (seg.type === "tone") {
+        ensureAudio();
+        currentFreq = parseInt(freqEl.value, 10) || currentFreq;
+        gain.gain.value = volEl.value / 100;
+
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = currentFreq;
+        osc.connect(gain);
+        osc.start();
+        currentOsc = osc;
+
+        if (seg.isLetterStart && seg.letterMetaIndex != null) {
+          if (lastStartedMetaIndex != null &&
+              lastStartedMetaIndex !== seg.letterMetaIndex &&
+              !completedMeta.has(lastStartedMetaIndex)) {
+            completedMeta.add(lastStartedMetaIndex);
+          }
+          lastStartedMetaIndex = seg.letterMetaIndex;
+
+          const idx = seg.letterMetaIndex;
+          waitForAnswerMetaIndex = idx;
+          if (!playedMeta.has(idx)) {
+            playedMeta.add(idx);
+            playedCount++;
+            updateStats();
+          }
+          highlightLetter(idx);
+        }
+
+        currentSegmentTimeout = setTimeout(() => {
+          stopCurrentOsc();
+          scheduleIndex++;
+          playNextSegmentStreaming();
+        }, durMs);
+      } else {
+        stopCurrentOsc();
+        currentSegmentTimeout = setTimeout(() => {
+          scheduleIndex++;
+          playNextSegmentStreaming();
+        }, durMs);
+      }
+    }
+
+    async function playStreaming() {
+      if (playing && paused) {
+        paused = false;
+        playBtn.disabled = true;
+        playBtn.textContent = "Toista";
+        pauseBtn.disabled = false;
+        stopBtn.disabled  = false;
+        playNextSegmentStreaming();
+        return;
+      }
+
+      if (playing && !paused) return;
+
+      const morseWords = currentMorseWords;
+      const lettersMeta = currentLettersMeta;
+      if (!morseWords || morseWords.length === 0) return;
+
+      schedule = buildSchedule(morseWords, lettersMeta);
+      if (schedule.length === 0) return;
+
+      ensureAudio();
+      try { await ctx.resume(); } catch (e) {}
+
+      const wpm = parseInt(wpmEl.value, 10) || 20;
+      unitDurationSec = 1.2 / wpm;
+      currentFreq = parseInt(freqEl.value, 10) || 600;
+      gain.gain.value = volEl.value / 100;
+
+      scheduleIndex = 0;
+      playing = true;
+      paused  = false;
+
+      clearSegmentTimeout();
+      stopCurrentOsc();
+      clearHighlight();
+
+      resetTestStatsForNewRun();
+
+      playBtn.disabled  = true;
+      playBtn.textContent = "Toista";
+      pauseBtn.disabled = false;
+      stopBtn.disabled  = false;
+
+      playNextSegmentStreaming();
+    }
+
+    function playTrainingLetterAt(index) {
+      if (!playing || paused) return;
+
+      if (index >= currentLettersMeta.length) {
+        stop();
+        return;
+      }
+
+      const meta = currentLettersMeta[index];
+      trainingCurrentLetterIndex = index;
+      trainingLetterAudioPlaying = true;
+      trainingAnswerReceived = false;
+
+      waitForAnswerMetaIndex = index;
+
+      if (!playedMeta.has(index)) {
+        playedMeta.add(index);
+        playedCount++;
+        updateStats();
+      }
+
+      highlightLetter(index);
+
+      const code = meta.code;
+      const segments = [];
+      const syms = code.split("");
+      syms.forEach((s, si) => {
+        segments.push({ type: "tone", units: s === "." ? 1 : 3 });
+        if (si < syms.length - 1) {
+          segments.push({ type: "silence", units: 1 });
+        }
+      });
+      segments.push({ type: "silence",  units: 3 });
+
+      let k = 0;
+
+      function runSeg() {
+        if (!playing || paused || !recvModeEl.checked || !recvModeWaitEl.checked) {
+          trainingLetterAudioPlaying = false;
+          return;
+        }
+        if (k >= segments.length) {
+          trainingLetterAudioPlaying = false;
+          if (trainingAnswerReceived) {
+            playTrainingLetterAt(index + 1);
+          }
+          return;
+        }
+
+        const seg = segments[k];
+        const durMs = seg.units * unitDurationSec * 1000;
+
+        if (seg.type === "tone") {
+          ensureAudio();
+          currentFreq = parseInt(freqEl.value, 10) || currentFreq;
+          gain.gain.value = volEl.value / 100;
+
+          const osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.value = currentFreq;
+          osc.connect(gain);
+          osc.start();
+          currentOsc = osc;
+
+          currentSegmentTimeout = setTimeout(() => {
+            stopCurrentOsc();
+            k++;
+            runSeg();
+          }, durMs);
+        } else {
+          stopCurrentOsc();
+          currentSegmentTimeout = setTimeout(() => {
+            k++;
+            runSeg();
+          }, durMs);
+        }
+      }
+
+      runSeg();
+    }
+
+    async function playTraining() {
+      if (playing && paused) {
+        paused = false;
+        playBtn.disabled = true;
+        playBtn.textContent = "Toista";
+        pauseBtn.disabled = false;
+        stopBtn.disabled  = false;
+        playTrainingLetterAt(trainingCurrentLetterIndex);
+      } else {
+        if (!currentLettersMeta.length) return;
+
+        ensureAudio();
+        try { await ctx.resume(); } catch (e) {}
+
+        const wpm = parseInt(wpmEl.value, 10) || 20;
+        unitDurationSec = 1.2 / wpm;
+        currentFreq = parseInt(freqEl.value, 10) || 600;
+        gain.gain.value = volEl.value / 100;
+
+        trainingCurrentLetterIndex = 0;
+        playing = true;
+        paused  = false;
+
+        genericStopCleanup();
+        resetTestStatsForNewRun();
+
+        playBtn.disabled  = true;
+        playBtn.textContent = "Toista";
+        pauseBtn.disabled = false;
+        stopBtn.disabled  = false;
+
+        playTrainingLetterAt(0);
+      }
+    }
+
+    async function handlePlayClick() {
+      if (!recvModeEl.checked || recvModeFreeEl.checked) {
+        await playStreaming();
+      } else {
+        await playTraining();
+      }
+    }
+
+    // --- Merkkijoukkojen muodostus automaattiseen testiin ---
+
+    function getCharPool() {
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+      const digits  = "0123456789";
+      const punct   = ".,?!:;/-'\"()=+@";
+
+      if (setModeCustomEl.checked) {
+        const s = customCharsEl.value || "";
+        const res = [];
+        for (let ch of s) {
+          const upper = ch.toUpperCase();
+          if (MORSE[upper] && !res.includes(upper)) {
+            res.push(upper);
+          }
+        }
+        return res;
+      }
+
+      let base = [];
+
+      if (lettersSetEl.checked) {
+        base = base.concat(letters.split(""));
+      }
+      if (digitsSetEl.checked) {
+        base = base.concat(digits.split(""));
+      }
+      if (punctSetEl.checked) {
+        base = base.concat(punct.split(""));
+      }
+
+      base = [...new Set(base)];
+      if (!base.length) return [];
+
+      if (setModeLettersEl.checked) {
+        base = base.filter(ch => letters.includes(ch));
+      } else if (setModeDigitsEl.checked) {
+        base = base.filter(ch => digits.includes(ch));
+      }
+      return base;
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function buildCombinedSet() {
+      const pool = getCharPool();
+      if (!pool.length) return "";
+
+      const groupSize = getRepeatCount();
+      const randomizeInside = randomizeGroupEl.checked;
+      const useGroupCount   = groupCountEnabledEl.checked;
+
+      let totalGroups;
+      if (useGroupCount) {
+        totalGroups = parseInt(groupCountEl.value, 10) || 1;
+        totalGroups = Math.max(1, Math.min(100, totalGroups));
+      } else {
+        // Oletus: yksi ryhmä jokaista poolin merkkiä kohden
+        totalGroups = pool.length;
+      }
+
+      let groups = [];
+
+      if (randomizeInside) {
+        // Randomize group: jokaisessa ryhmässä groupSize satunnaista merkkiä poolista
+        for (let g = 0; g < totalGroups; g++) {
+          let str = "";
+          for (let i = 0; i < groupSize; i++) {
+            const ch = pool[Math.floor(Math.random() * pool.length)];
+            str += ch;
+          }
+          groups.push(str);
+        }
+      } else {
+        // Vanha logiikka: merkki toistetaan groupSize kertaa
+        let idx = 0;
+        for (let g = 0; g < totalGroups; g++) {
+          const ch = pool[idx % pool.length];
+          groups.push(ch.repeat(groupSize));
+          idx++;
+        }
+      }
+
+      if (randomOrderEl.checked) {
+        shuffleArray(groups);
+      }
+
+      const sep = groupSpaceEl.checked ? " " : "";
+      return groups.join(sep);
+    }
+
+    function shouldAutoFill() {
+      if (setModeCustomEl.checked) {
+        return customCharsEl.value.trim().length > 0;
+      }
+      return lettersSetEl.checked || digitsSetEl.checked || punctSetEl.checked;
+    }
+
+    function regenerateAutoTextIfNeeded() {
+      if (!shouldAutoFill()) return;
+      const txt = buildCombinedSet();
+      if (playing || paused) stop();
+      tEl.value = txt;
+      refreshMorse();
+    }
+
+    // --- Vastaanoton apufunktiot ---
+    function getNextPendingMetaIndex() {
+      for (let i = 0; i < currentLettersMeta.length; i++) {
+        if (playedMeta.has(i) && !answeredMeta.has(i)) {
+          return i;
+        }
+      }
+      return null;
+    }
+
+    function appendAnswerDisplay(metaIndex, userChar, isCorrect) {
+      const span = document.createElement("span");
+      span.className = "answer-char " + (isCorrect ? "correct" : "wrong");
+      span.dataset.metaIndex = String(metaIndex);
+      span.textContent = userChar + " ";
+      recvEl.appendChild(span);
+      answerHistory.push({ metaIndex, isCorrect, element: span, char: userChar });
+    }
+
+    function applyAnswer(metaIndex, userChar) {
+      if (metaIndex == null) return;
+      const expectedMeta = currentLettersMeta[metaIndex];
+      if (!expectedMeta) return;
+
+      const expectedChar = expectedMeta.char;
+      const isCorrect = userChar.toUpperCase() === expectedChar.toUpperCase();
+
+      if (!answeredMeta.has(metaIndex)) {
+        answeredMeta.add(metaIndex);
+        if (isCorrect) correctCount++;
+        else wrongCount++;
+      }
+      updateStats();
+
+      appendAnswerDisplay(metaIndex, userChar, isCorrect);
+
+      if (recvModeEl.checked && recvModeWaitEl.checked) {
+        if (metaIndex === waitForAnswerMetaIndex) {
+          trainingAnswerReceived = true;
+          if (!trainingLetterAudioPlaying) {
+            playTrainingLetterAt(trainingCurrentLetterIndex + 1);
+          }
+        }
+      }
+    }
+
+    function undoLastAnswer() {
+      if (answerHistory.length === 0) return;
+      const last = answerHistory.pop();
+      const { metaIndex, isCorrect, element } = last;
+
+      if (element && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+
+      if (answeredMeta.has(metaIndex)) {
+        answeredMeta.delete(metaIndex);
+        if (isCorrect) correctCount--;
+        else wrongCount--;
+        updateStats();
+      }
+
+      if (recvModeEl.checked && recvModeWaitEl.checked) {
+        if (metaIndex === waitForAnswerMetaIndex) {
+          trainingAnswerReceived = false;
+        }
+      }
+    }
+
+    // --- Tapahtumat tekstille ja valinnoille ---
+    tEl.addEventListener("input", () => {
+      if (lettersSetEl.checked || digitsSetEl.checked || punctSetEl.checked) {
+        lettersSetEl.checked = false;
+        digitsSetEl.checked  = false;
+        punctSetEl.checked   = false;
+      }
+      if (playing || paused) stop();
+      refreshMorse();
+    });
+
+    [lettersSetEl, digitsSetEl, punctSetEl].forEach(el => {
+      el.addEventListener("change", regenerateAutoTextIfNeeded);
+    });
+
+    clearBtn.addEventListener("click", () => {
+      if (playing || paused) stop();
+      tEl.value = "";
+      currentMorseWords = [];
+      currentLettersMeta = [];
+      mEl.textContent = "(ei tekstiä)";
+      lettersSetEl.checked = false;
+      digitsSetEl.checked  = false;
+      punctSetEl.checked   = false;
+
+      totalLetters = 0;
+      playedCount  = 0;
+      correctCount = 0;
+      wrongCount   = 0;
+      earlyCount   = 0;
+      playedMeta.clear();
+      answeredMeta.clear();
+      completedMeta.clear();
+      lastStartedMetaIndex = null;
+      waitForAnswerMetaIndex = null;
+      answerHistory.length = 0;
+      recvEl.innerHTML = "";
+      updateStats();
+    });
+
+    [setModeAllEl, setModeLettersEl, setModeDigitsEl, setModeCustomEl].forEach(el => {
+      el.addEventListener("change", regenerateAutoTextIfNeeded);
+    });
+
+    customCharsEl.addEventListener("input", regenerateAutoTextIfNeeded);
+
+    recvModeEl.addEventListener("change", () => {
+      if (playing || paused) {
+        stop();
+      }
+    });
+
+    repeatCountEl.addEventListener("input", () => {
+      repeatCountLabelEl.textContent = repeatCountEl.value;
+      regenerateAutoTextIfNeeded();
+    });
+
+    randomOrderEl.addEventListener("change", regenerateAutoTextIfNeeded);
+    groupSpaceEl.addEventListener("change", regenerateAutoTextIfNeeded);
+
+    randomizeGroupEl.addEventListener("change", regenerateAutoTextIfNeeded);
+    groupCountEnabledEl.addEventListener("change", regenerateAutoTextIfNeeded);
+    groupCountEl.addEventListener("input", () => {
+      groupCountLabelEl.textContent = groupCountEl.value;
+      if (groupCountEnabledEl.checked) {
+        regenerateAutoTextIfNeeded();
+      }
+    });
+
+    // --- Sliderit (live) ---
+    wpmEl.addEventListener("input", () => {
+      const w = parseInt(wpmEl.value, 10) || 20;
+      wpmL.textContent = String(w);
+      const cpm = w * 5;
+      cpmEl.value = String(cpm);
+      cpmL.textContent = String(cpm);
+      unitDurationSec = 1.2 / w;
+    });
+
+    cpmEl.addEventListener("input", () => {
+      const v = parseInt(cpmEl.value, 10) || 0;
+      const wRaw = Math.round(v / 5);
+      const wClamped = Math.min(40, Math.max(5, wRaw));
+      wpmEl.value = String(wClamped);
+      wpmL.textContent = String(wClamped);
+      cpmL.textContent = String(v);
+      unitDurationSec = 1.2 / wClamped;
+    });
+
+    freqEl.addEventListener("input", () => {
+      freqL.textContent = freqEl.value;
+      const f = parseInt(freqEl.value, 10) || 600;
+      currentFreq = f;
+      if (currentOsc) {
+        currentOsc.frequency.value = f;
+      }
+    });
+
+    volEl.addEventListener("input", () => {
+      volL.textContent = volEl.value;
+      if (gain) {
+        gain.gain.value = volEl.value / 100;
+      }
+    });
+
+    // --- Ohjausnapit ---
+    playBtn.addEventListener("click", () => { handlePlayClick(); });
+    pauseBtn.addEventListener("click", () => pause());
+    stopBtn.addEventListener("click", () => stop());
+
+    // --- Vastaanottotesti / näppäinkäsittely ---
+    document.addEventListener("keydown", (ev) => {
+      if (!recvModeEl.checked) return;
+
+      const key = ev.key;
+
+      if (key === "Backspace") {
+        if (!allowCorrectionEl.checked) return;
+        ev.preventDefault();
+        undoLastAnswer();
+        return;
+      }
+
+      if (!key || key.length !== 1) return;
+      const userChar = key;
+
+      let metaIndex = null;
+
+      if (recvModeWaitEl.checked) {
+        if (waitForAnswerMetaIndex == null) return;
+        metaIndex = waitForAnswerMetaIndex;
+
+        // 1) liian aikaisin: kirjain vielä äänessä
+        if (trainingLetterAudioPlaying) {
+          if (playing) {
+            ev.preventDefault();
+            earlyCount++;
+            updateStats();
+            playErrorBeepAndPause();
+          }
+          return;
+        }
+
+        // 2) ylimääräinen samaan kirjaimeen
+        if (answeredMeta.has(metaIndex)) {
+          if (playing) {
+            ev.preventDefault();
+            earlyCount++;
+            updateStats();
+            playErrorBeepAndPause();
+            trainingCurrentLetterIndex = metaIndex + 1;
+            trainingAnswerReceived = false;
+          }
+          return;
+        }
+      } else {
+        // puskuroiva tila
+        metaIndex = getNextPendingMetaIndex();
+        if (metaIndex == null) {
+          if (playing && playedCount < totalLetters) {
+            ev.preventDefault();
+            earlyCount++;
+            updateStats();
+            playErrorBeepAndPause();
+          }
+          return;
+        }
+
+        // jos kirjain ei ole vielä kokonaan soitettu -> liian aikaisin
+        if (!completedMeta.has(metaIndex)) {
+          if (playing) {
+            ev.preventDefault();
+            earlyCount++;
+            updateStats();
+            playErrorBeepAndPause();
+          }
+          return;
+        }
+      }
+
+      ev.preventDefault();
+      applyAnswer(metaIndex, userChar);
+    });
+
+    // --- Init ---
+    (function init() {
+      const initWpm = parseInt(wpmEl.value, 10) || 20;
+      wpmL.textContent = wpmEl.value;
+      unitDurationSec = 1.2 / initWpm;
+      const initCpm = initWpm * 5;
+      cpmEl.value = String(initCpm);
+      cpmL.textContent = String(initCpm);
+      freqL.textContent = freqEl.value;
+      volL.textContent = volEl.value;
+      repeatCountLabelEl.textContent = repeatCountEl.value;
+      groupCountLabelEl.textContent  = groupCountEl.value;
+      updateStats();
+      refreshMorse();
+      playBtn.disabled  = false;
+      pauseBtn.disabled = true;
+      stopBtn.disabled  = true;
+    })();
+  </script>
+</body>
+</html>
